@@ -40,7 +40,7 @@
   .header p { color: var(--muted); font-size: 0.95rem; }
   .kpi-row {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     gap: 1rem;
     margin-bottom: 2rem;
   }
@@ -52,7 +52,7 @@
     text-align: center;
   }
   .kpi .value { font-size: 2rem; font-weight: 800; color: var(--accent2); }
-  .kpi .label { font-size: 0.8rem; color: var(--muted); margin-top: 0.25rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .kpi .label { font-size: 0.75rem; color: var(--muted); margin-top: 0.25rem; text-transform: uppercase; letter-spacing: 0.05em; }
   .kpi.green .value { color: var(--green); }
   .kpi.orange .value { color: var(--orange); }
   .kpi.pink .value { color: var(--pink); }
@@ -72,6 +72,7 @@
   .card h3 { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
   .card canvas { max-height: 320px; }
   .card.wide { grid-column: 1 / -1; }
+  .card.tall canvas { max-height: 500px; }
   .badge-grid { display: flex; flex-wrap: wrap; gap: 0.5rem; }
   .badge {
     background: var(--surface2);
@@ -82,6 +83,44 @@
     color: var(--muted);
   }
   .badge strong { color: var(--text); margin-left: 0.3rem; }
+  .section-title {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--accent2);
+    margin: 2.5rem 0 1.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  table.member-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+  table.member-table th {
+    text-align: left;
+    color: var(--muted);
+    font-weight: 600;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+  }
+  table.member-table td {
+    padding: 0.4rem 0.75rem;
+    border-bottom: 1px solid var(--surface2);
+    color: var(--text);
+  }
+  table.member-table tr:hover td { background: var(--surface2); }
+  .tag {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  .tag.f { background: #f472b620; color: var(--pink); }
+  .tag.m { background: #22d3ee20; color: var(--cyan); }
   .footer {
     text-align: center;
     color: var(--muted);
@@ -126,31 +165,74 @@ fetch('stats.json').then(r => r.json()).then(d => {
   const longTerm = d.types['long-term'] || 0;
   const core = d.types['core'] || 0;
   const regular = d.types['member'] || 0;
+  const ocg = d.onCampusGender || {};
+
+  // Build recent LT table rows
+  const ltRows = (d.recentLongTermers || []).map(m =>
+    `<tr><td>${m.name}</td><td>${m.joined}</td><td><span class="tag ${m.gender==='female'?'f':'m'}">${m.gender||'?'}</span></td><td>${m.location||'—'}</td></tr>`
+  ).join('');
+
+  // Build female LT table rows
+  const fltRows = (d.longTermFemaleList || []).map(m =>
+    `<tr><td>${m.name}</td><td>${m.joined}</td><td>${m.location||'—'}</td></tr>`
+  ).join('');
 
   app.innerHTML = `
     <div class="kpi-row">
       <div class="kpi"><div class="value">${d.total.toLocaleString()}</div><div class="label">Total Members</div></div>
-      <div class="kpi green"><div class="value">${d.onCampus}</div><div class="label">On Campus Now</div></div>
+      <div class="kpi green"><div class="value">${d.onCampus}</div><div class="label">On Campus</div></div>
       <div class="kpi orange"><div class="value">${longTerm}</div><div class="label">Long-Term</div></div>
       <div class="kpi pink"><div class="value">${core}</div><div class="label">Core Team</div></div>
-      <div class="kpi cyan"><div class="value">${d.thisMonth}</div><div class="label">Joined Jun 2026</div></div>
-      <div class="kpi"><div class="value">${d.lastMonth}</div><div class="label">Joined May 2026</div></div>
-      <div class="kpi pink"><div class="value">${d.gender.female}</div><div class="label">Female</div></div>
+      <div class="kpi cyan"><div class="value">${d.thisMonth}</div><div class="label">Joined Jun '26</div></div>
+      <div class="kpi"><div class="value">${d.lastMonth}</div><div class="label">Joined May '26</div></div>
+      <div class="kpi pink"><div class="value">${d.gender.female}</div><div class="label">Female Total</div></div>
       <div class="kpi cyan"><div class="value">${d.countries.length}</div><div class="label">Countries</div></div>
+      <div class="kpi pink"><div class="value">${ocg.female||0}</div><div class="label">Female On Campus</div></div>
+      <div class="kpi orange"><div class="value">${d.longTermFemale||0}</div><div class="label">Female Long-Term</div></div>
     </div>
+
     <div class="grid">
       <div class="card wide"><h3>Member Growth — Monthly Joins</h3><canvas id="cGrowth"></canvas></div>
+
+      <div class="card wide"><h3>Long-Termers — Monthly Trend (Total vs Female)</h3><canvas id="cLTMonthly"></canvas></div>
+
+      <div class="card"><h3>On Campus — Gender Split</h3><canvas id="cOCGender"></canvas></div>
       <div class="card"><h3>Member Type</h3><canvas id="cTypes"></canvas></div>
-      <div class="card"><h3>Gender</h3><canvas id="cGender"></canvas></div>
+
+      <div class="card"><h3>Overall Gender</h3><canvas id="cGender"></canvas></div>
       <div class="card"><h3>Social Platforms</h3><canvas id="cSocials"></canvas></div>
+
       <div class="card"><h3>Roles (from Experience)</h3><canvas id="cRoles"></canvas></div>
       <div class="card"><h3>Top 15 Countries</h3><canvas id="cCountries"></canvas></div>
+
       <div class="card"><h3>Top 15 Cities</h3><canvas id="cCities"></canvas></div>
-      <div class="card wide"><h3>Profile Completeness</h3><canvas id="cComplete"></canvas></div>
+      <div class="card"><h3>Profile Completeness</h3><canvas id="cComplete"></canvas></div>
+    </div>
+
+    <div class="section-title">Recent Long-Termers (Mar–Jun 2026) — ${(d.recentLongTermers||[]).length} members</div>
+    <div class="card wide" style="overflow-x:auto">
+      <table class="member-table">
+        <thead><tr><th>Name</th><th>Joined</th><th>Gender</th><th>Location</th></tr></thead>
+        <tbody>${ltRows}</tbody>
+      </table>
+    </div>
+
+    <div class="section-title">All Female Long-Termers — ${d.longTermFemale||0} of ${d.longTermTotal||0}</div>
+    <div class="card wide" style="overflow-x:auto">
+      <table class="member-table">
+        <thead><tr><th>Name</th><th>Joined</th><th>Location</th></tr></thead>
+        <tbody>${fltRows}</tbody>
+      </table>
+    </div>
+
+    <div class="grid" style="margin-top:2rem">
       <div class="card wide"><h3>All Countries</h3><div class="badge-grid" id="badges"></div></div>
     </div>
+
     <div class="footer">Data scraped from NS directory on 2026-06-05 using <a href="https://cloud.browser-use.com/" target="_blank">Browser Use Cloud</a></div>
   `;
+
+  // === CHARTS ===
 
   // Growth
   const months = d.monthlyJoins;
@@ -164,6 +246,31 @@ fetch('stats.json').then(r => r.json()).then(d => {
       ]
     },
     options:{responsive:true, interaction:{mode:'index',intersect:false}, scales:{y:{beginAtZero:true,title:{display:true,text:'New/Month'}},y1:{position:'right',beginAtZero:true,title:{display:true,text:'Cumulative'},grid:{display:false}}}}
+  });
+
+  // Long-Term monthly trend
+  const ltMonths = d.longTermByMonth || [];
+  const ltfMonths = d.longTermFemaleByMonth || [];
+  const allLTLabels = [...new Set([...ltMonths.map(m=>m[0]), ...ltfMonths.map(m=>m[0])])].sort();
+  const ltMap = Object.fromEntries(ltMonths);
+  const ltfMap = Object.fromEntries(ltfMonths);
+  new Chart(document.getElementById('cLTMonthly'), {
+    type:'bar',
+    data:{
+      labels: allLTLabels,
+      datasets:[
+        {label:'Long-Term Total', data:allLTLabels.map(l=>ltMap[l]||0), backgroundColor:C.orange, borderRadius:4},
+        {label:'Long-Term Female', data:allLTLabels.map(l=>ltfMap[l]||0), backgroundColor:C.pink, borderRadius:4},
+      ]
+    },
+    options:{responsive:true, interaction:{mode:'index',intersect:false}, scales:{y:{beginAtZero:true}}}
+  });
+
+  // On Campus Gender
+  new Chart(document.getElementById('cOCGender'), {
+    type:'doughnut',
+    data:{labels:['Male','Female','Unknown'], datasets:[{data:[ocg.male||0,ocg.female||0,ocg.unknown||0], backgroundColor:[C.cyan,C.pink,C.violet], borderWidth:0}]},
+    options:{responsive:true, plugins:{legend:{position:'bottom'}}}
   });
 
   // Types
