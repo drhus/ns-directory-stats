@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Network School Directory Stats</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #141420;
+    --surface2: #1c1c2e;
+    --border: #2a2a40;
+    --text: #e0e0e8;
+    --muted: #8888a0;
+    --accent: #6366f1;
+    --accent2: #a78bfa;
+    --green: #34d399;
+    --orange: #fb923c;
+    --pink: #f472b6;
+    --cyan: #22d3ee;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 2rem;
+  }
+  .header {
+    text-align: center;
+    margin-bottom: 3rem;
+  }
+  .header h1 {
+    font-size: 2.5rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--accent), var(--accent2), var(--pink));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 0.5rem;
+  }
+  .header p { color: var(--muted); font-size: 0.95rem; }
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+  .kpi {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+    text-align: center;
+  }
+  .kpi .value {
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--accent2);
+  }
+  .kpi .label {
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-top: 0.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .kpi.green .value { color: var(--green); }
+  .kpi.orange .value { color: var(--orange); }
+  .kpi.pink .value { color: var(--pink); }
+  .kpi.cyan .value { color: var(--cyan); }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+  }
+  .card h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .card canvas { max-height: 320px; }
+  .card.wide { grid-column: 1 / -1; }
+  .bar-list { list-style: none; }
+  .bar-list li {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.6rem;
+    font-size: 0.9rem;
+  }
+  .bar-list .bar-bg {
+    flex: 1;
+    height: 24px;
+    background: var(--surface2);
+    border-radius: 6px;
+    overflow: hidden;
+    position: relative;
+  }
+  .bar-list .bar-fill {
+    height: 100%;
+    border-radius: 6px;
+    transition: width 1s ease;
+  }
+  .bar-list .bar-label {
+    min-width: 120px;
+    text-align: right;
+    color: var(--text);
+    font-weight: 500;
+  }
+  .bar-list .bar-count {
+    min-width: 50px;
+    text-align: right;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+  .badge-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .badge {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.4rem 0.75rem;
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+  .badge strong { color: var(--text); margin-left: 0.3rem; }
+  .footer {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.8rem;
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+  .footer a { color: var(--accent2); text-decoration: none; }
+  #loading {
+    text-align: center;
+    padding: 4rem;
+    font-size: 1.2rem;
+    color: var(--muted);
+  }
+  @media (max-width: 600px) {
+    body { padding: 1rem; }
+    .grid { grid-template-columns: 1fr; }
+    .header h1 { font-size: 1.5rem; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Network School Directory</h1>
+  <p>Member analytics dashboard — data scraped 2026-06-05 via Browser Use Cloud</p>
+</div>
+
+<div id="loading">Loading data...</div>
+<div id="app" style="display:none"></div>
+
+<script>
+const COLORS = {
+  purple: '#6366f1', violet: '#a78bfa', pink: '#f472b6',
+  cyan: '#22d3ee', green: '#34d399', orange: '#fb923c',
+  yellow: '#fbbf24', red: '#f87171', blue: '#60a5fa',
+  teal: '#2dd4bf', indigo: '#818cf8', rose: '#fb7185',
+};
+const PALETTE = Object.values(COLORS);
+
+Chart.defaults.color = '#8888a0';
+Chart.defaults.borderColor = '#2a2a40';
+Chart.defaults.font.family = "'Inter', sans-serif";
+
+async function main() {
+  const [members, profiles] = await Promise.all([
+    fetch('data_members.json').then(r => r.json()),
+    fetch('data_profiles.json').then(r => r.json()),
+  ]);
+
+  const profileMap = {};
+  profiles.forEach(p => profileMap[p.username] = p);
+
+  document.getElementById('loading').style.display = 'none';
+  const app = document.getElementById('app');
+  app.style.display = 'block';
+
+  // === KPIs ===
+  const totalMembers = members.length;
+  const onCampus = members.filter(m => m.isOnCampus).length;
+  const longTerm = members.filter(m => m.type === 'long-term').length;
+  const core = members.filter(m => m.type === 'core').length;
+  const regular = members.filter(m => m.type === 'member').length;
+  const female = members.filter(m => m.gender === 'female').length;
+  const male = members.filter(m => m.gender === 'male').length;
+
+  // Join date analysis
+  const now = new Date('2026-06-06');
+  const thisMonth = members.filter(m => m.joinedAt && m.joinedAt.startsWith('2026-06')).length;
+  const lastMonth = members.filter(m => m.joinedAt && m.joinedAt.startsWith('2026-05')).length;
+
+  // Countries
+  const countryCounts = {};
+  members.forEach(m => {
+    if (!m.originLocation) return;
+    const parts = m.originLocation.split(', ');
+    const country = parts[parts.length - 1];
+    if (country) countryCounts[country] = (countryCounts[country] || 0) + 1;
+  });
+  const countries = Object.entries(countryCounts).sort((a,b) => b[1] - a[1]);
+
+  // Socials
+  const socialCounts = {};
+  profiles.forEach(p => {
+    const seen = new Set();
+    (p.socials || []).forEach(s => {
+      const url = (s.url || '').toLowerCase();
+      const label = (s.label || '').toLowerCase();
+      let platform = null;
+      if (url.includes('x.com') || url.includes('twitter.com')) platform = 'X / Twitter';
+      else if (url.includes('linkedin.com') || label.includes('linkedin')) platform = 'LinkedIn';
+      else if (url.includes('github.com')) platform = 'GitHub';
+      else if (url.includes('discord')) platform = 'Discord';
+      else if (label.includes('farcaster') || url.includes('warpcast')) platform = 'Farcaster';
+      else if (url.includes('instagram.com') || label.includes('instagram')) platform = 'Instagram';
+      else if (url.includes('t.me') || label.includes('telegram')) platform = 'Telegram';
+      else if (url.includes('youtube.com')) platform = 'YouTube';
+      else if (label.includes('personal site') || label === 'website') platform = 'Personal Site';
+      else platform = 'Other';
+      if (!seen.has(platform)) {
+        seen.add(platform);
+        socialCounts[platform] = (socialCounts[platform] || 0) + 1;
+      }
+    });
+  });
+  const socials = Object.entries(socialCounts).sort((a,b) => b[1] - a[1]);
+
+  // Roles
+  const roleCounts = {};
+  const roleKeywords = {
+    'Founder': /founder/i, 'Engineer': /engineer/i, 'CEO': /\bceo\b/i,
+    'Developer': /developer/i, 'Designer': /designer/i, 'CTO': /\bcto\b/i,
+    'Product': /product/i, 'AI / ML': /\b(ai|machine learning|ml)\b/i,
+    'Web3': /\b(blockchain|web3|crypto|defi)\b/i, 'Manager': /manager/i,
+    'Research': /research/i, 'Marketing': /marketing/i, 'Data': /\bdata\b/i,
+    'Consultant': /consultant/i, 'Analyst': /analyst/i,
+  };
+  profiles.forEach(p => {
+    (p.experience || []).forEach(exp => {
+      const title = (exp.lines || [])[0] || '';
+      Object.entries(roleKeywords).forEach(([k, re]) => {
+        if (re.test(title)) roleCounts[k] = (roleCounts[k] || 0) + 1;
+      });
+    });
+  });
+  const roles = Object.entries(roleCounts).sort((a,b) => b[1] - a[1]);
+
+  // Monthly join trend
+  const monthCounts = {};
+  members.forEach(m => {
+    if (!m.joinedAt) return;
+    const mo = m.joinedAt.slice(0, 7);
+    monthCounts[mo] = (monthCounts[mo] || 0) + 1;
+  });
+  const months = Object.entries(monthCounts).sort((a,b) => a[0].localeCompare(b[0]));
+
+  // Profile completeness
+  const withBio = profiles.filter(p => p.bio && p.bio !== "Here's what I've been doing. You should join me at Network School!").length;
+  const withExp = profiles.filter(p => (p.experience||[]).length > 0).length;
+  const withEdu = profiles.filter(p => (p.education||[]).length > 0).length;
+  const withSocials = profiles.filter(p => (p.socials||[]).length > 0).length;
+
+  // Cities
+  const cityCounts = {};
+  members.forEach(m => {
+    if (!m.originLocation) return;
+    const parts = m.originLocation.split(', ');
+    const city = parts[0];
+    if (city) cityCounts[city] = (cityCounts[city] || 0) + 1;
+  });
+  const cities = Object.entries(cityCounts).sort((a,b) => b[1] - a[1]).slice(0, 15);
+
+  // === RENDER ===
+  app.innerHTML = `
+    <div class="kpi-row">
+      <div class="kpi"><div class="value">${totalMembers.toLocaleString()}</div><div class="label">Total Members</div></div>
+      <div class="kpi green"><div class="value">${onCampus}</div><div class="label">On Campus Now</div></div>
+      <div class="kpi orange"><div class="value">${longTerm}</div><div class="label">Long-Term</div></div>
+      <div class="kpi pink"><div class="value">${core}</div><div class="label">Core Team</div></div>
+      <div class="kpi cyan"><div class="value">${thisMonth}</div><div class="label">Joined This Month</div></div>
+      <div class="kpi"><div class="value">${lastMonth}</div><div class="label">Joined Last Month</div></div>
+      <div class="kpi pink"><div class="value">${female}</div><div class="label">Female</div></div>
+      <div class="kpi cyan"><div class="value">${countries.length}</div><div class="label">Countries</div></div>
+    </div>
+
+    <div class="grid">
+      <div class="card wide">
+        <h3>Member Growth — Monthly Joins</h3>
+        <canvas id="chartGrowth"></canvas>
+      </div>
+
+      <div class="card">
+        <h3>Member Type Breakdown</h3>
+        <canvas id="chartTypes"></canvas>
+      </div>
+
+      <div class="card">
+        <h3>Gender Distribution</h3>
+        <canvas id="chartGender"></canvas>
+      </div>
+
+      <div class="card">
+        <h3>Social Platforms</h3>
+        <canvas id="chartSocials"></canvas>
+      </div>
+
+      <div class="card">
+        <h3>Role Keywords (from Experience)</h3>
+        <canvas id="chartRoles"></canvas>
+      </div>
+
+      <div class="card">
+        <h3>Top 15 Countries</h3>
+        <canvas id="chartCountries"></canvas>
+      </div>
+
+      <div class="card">
+        <h3>Top 15 Cities</h3>
+        <canvas id="chartCities"></canvas>
+      </div>
+
+      <div class="card wide">
+        <h3>Profile Completeness</h3>
+        <canvas id="chartCompleteness"></canvas>
+      </div>
+
+      <div class="card wide">
+        <h3>All Countries</h3>
+        <div class="badge-grid" id="badgeCountries"></div>
+      </div>
+    </div>
+
+    <div class="footer">
+      Data scraped from NS internal directory on 2026-06-05 using
+      <a href="https://cloud.browser-use.com/" target="_blank">Browser Use Cloud</a>
+    </div>
+  `;
+
+  // Growth chart
+  new Chart(document.getElementById('chartGrowth'), {
+    type: 'bar',
+    data: {
+      labels: months.map(m => m[0]),
+      datasets: [{
+        label: 'New Members',
+        data: months.map(m => m[1]),
+        backgroundColor: months.map((m, i) => m[0].startsWith('2026-06') ? COLORS.green : COLORS.purple),
+        borderRadius: 4,
+      }, {
+        label: 'Cumulative',
+        data: months.reduce((acc, m) => { acc.push((acc.length ? acc[acc.length-1] : 0) + m[1]); return acc; }, []),
+        type: 'line',
+        borderColor: COLORS.pink,
+        backgroundColor: 'transparent',
+        pointBackgroundColor: COLORS.pink,
+        tension: 0.3,
+        yAxisID: 'y1',
+      }]
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        y: { beginAtZero: true, title: { display: true, text: 'New / Month' }},
+        y1: { position: 'right', beginAtZero: true, title: { display: true, text: 'Cumulative' }, grid: { display: false }},
+      }
+    }
+  });
+
+  // Types donut
+  new Chart(document.getElementById('chartTypes'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Regular', 'Long-Term', 'Core'],
+      datasets: [{ data: [regular, longTerm, core], backgroundColor: [COLORS.purple, COLORS.orange, COLORS.pink], borderWidth: 0 }]
+    },
+    options: { responsive: true, plugins: { legend: { position: 'bottom' }}}
+  });
+
+  // Gender donut
+  new Chart(document.getElementById('chartGender'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Male', 'Female', 'Unknown'],
+      datasets: [{ data: [male, female, totalMembers - male - female], backgroundColor: [COLORS.cyan, COLORS.pink, COLORS.violet], borderWidth: 0 }]
+    },
+    options: { responsive: true, plugins: { legend: { position: 'bottom' }}}
+  });
+
+  // Socials horizontal bar
+  new Chart(document.getElementById('chartSocials'), {
+    type: 'bar',
+    data: {
+      labels: socials.map(s => s[0]),
+      datasets: [{ data: socials.map(s => s[1]), backgroundColor: PALETTE, borderRadius: 4 }]
+    },
+    options: { responsive: true, indexAxis: 'y', plugins: { legend: { display: false }}}
+  });
+
+  // Roles horizontal bar
+  new Chart(document.getElementById('chartRoles'), {
+    type: 'bar',
+    data: {
+      labels: roles.map(r => r[0]),
+      datasets: [{ data: roles.map(r => r[1]), backgroundColor: PALETTE.slice(3), borderRadius: 4 }]
+    },
+    options: { responsive: true, indexAxis: 'y', plugins: { legend: { display: false }}}
+  });
+
+  // Countries
+  const top15Countries = countries.slice(0, 15);
+  new Chart(document.getElementById('chartCountries'), {
+    type: 'bar',
+    data: {
+      labels: top15Countries.map(c => c[0]),
+      datasets: [{ data: top15Countries.map(c => c[1]), backgroundColor: COLORS.accent2, borderRadius: 4 }]
+    },
+    options: { responsive: true, indexAxis: 'y', plugins: { legend: { display: false }}}
+  });
+
+  // Cities
+  new Chart(document.getElementById('chartCities'), {
+    type: 'bar',
+    data: {
+      labels: cities.map(c => c[0]),
+      datasets: [{ data: cities.map(c => c[1]), backgroundColor: COLORS.cyan, borderRadius: 4 }]
+    },
+    options: { responsive: true, indexAxis: 'y', plugins: { legend: { display: false }}}
+  });
+
+  // Profile completeness
+  new Chart(document.getElementById('chartCompleteness'), {
+    type: 'bar',
+    data: {
+      labels: ['Has Socials', 'Custom Bio', 'Has Experience', 'Has Education'],
+      datasets: [{
+        label: 'Members',
+        data: [withSocials, withBio, withExp, withEdu],
+        backgroundColor: [COLORS.green, COLORS.cyan, COLORS.violet, COLORS.orange],
+        borderRadius: 6,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false }},
+      scales: { y: { beginAtZero: true, max: profiles.length }}
+    }
+  });
+
+  // Country badges
+  const badgeEl = document.getElementById('badgeCountries');
+  countries.forEach(([name, count]) => {
+    badgeEl.innerHTML += `<span class="badge">${name}<strong>${count}</strong></span>`;
+  });
+}
+
+main().catch(e => {
+  document.getElementById('loading').textContent = 'Error loading data: ' + e.message;
+});
+</script>
+</body>
+</html>
