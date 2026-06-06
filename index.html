@@ -225,6 +225,22 @@ fetch('stats.json').then(r => r.json()).then(d => {
       </table>
     </div>
 
+    <div class="section-title">Recent Members Social Platforms (May–Jun 2026) — ${d.recentMembersCount||0} members</div>
+    <div class="grid">
+      <div class="card"><h3>Social Presence (Recent Members)</h3><canvas id="cRecentSocials"></canvas></div>
+      <div class="card"><h3>Recent vs All — Social Comparison</h3><canvas id="cSocialCompare"></canvas></div>
+    </div>
+
+    <div class="section-title">Recent Members with X Accounts — ${(d.recentXMembers||[]).length} handles</div>
+    <div class="card wide" style="overflow-x:auto;max-height:500px;overflow-y:auto">
+      <table class="member-table">
+        <thead><tr><th>Name</th><th>X Handle</th><th>Joined</th><th>Type</th><th>Role</th></tr></thead>
+        <tbody>${(d.recentXMembers||[]).map(m =>
+          '<tr><td>'+m.name+'</td><td><a href="https://x.com/'+m.handle+'" target="_blank" style="color:'+C.cyan+'">@'+m.handle+'</a></td><td>'+m.joined+'</td><td>'+(m.type==='long-term'?'<span class="tag" style="background:#fb923c20;color:#fb923c">LT</span>':m.type==='core'?'<span class="tag" style="background:#f472b620;color:#f472b6">CORE</span>':'')+'</td><td style="color:#8888a0;font-size:0.8rem">'+m.job+'</td></tr>'
+        ).join('')}</tbody>
+      </table>
+    </div>
+
     <div class="grid" style="margin-top:2rem">
       <div class="card wide"><h3>All Countries</h3><div class="badge-grid" id="badges"></div></div>
     </div>
@@ -321,6 +337,30 @@ fetch('stats.json').then(r => r.json()).then(d => {
     type:'bar',
     data:{labels:['Has Socials','Custom Bio','Has Experience','Has Education'], datasets:[{data:[d.completeness.socials,d.completeness.bio,d.completeness.experience,d.completeness.education], backgroundColor:[C.green,C.cyan,C.violet,C.orange], borderRadius:6}]},
     options:{responsive:true, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true,max:d.totalProfiles}}}
+  });
+
+  // Recent Socials
+  const rs = d.recentSocials || [];
+  new Chart(document.getElementById('cRecentSocials'), {
+    type:'bar',
+    data:{labels:rs.map(s=>s[0]), datasets:[{data:rs.map(s=>s[1]), backgroundColor:PAL, borderRadius:4}]},
+    options:{responsive:true, indexAxis:'y', plugins:{legend:{display:false}}}
+  });
+
+  // Social comparison: recent vs all
+  const allSocMap = Object.fromEntries(d.socials);
+  const recSocMap = Object.fromEntries(rs);
+  const compLabels = [...new Set([...d.socials.map(s=>s[0]), ...rs.map(s=>s[0])])].sort((a,b)=>(allSocMap[b]||0)-(allSocMap[a]||0));
+  new Chart(document.getElementById('cSocialCompare'), {
+    type:'bar',
+    data:{
+      labels: compLabels,
+      datasets:[
+        {label:'All Members %', data:compLabels.map(l=>Math.round(((allSocMap[l]||0)/d.totalProfiles)*100)), backgroundColor:C.purple, borderRadius:4},
+        {label:'Recent (May-Jun) %', data:compLabels.map(l=>Math.round(((recSocMap[l]||0)/d.recentMembersCount)*100)), backgroundColor:C.green, borderRadius:4},
+      ]
+    },
+    options:{responsive:true, indexAxis:'y', plugins:{legend:{position:'top'}}, scales:{x:{title:{display:true,text:'% of members'}}}}
   });
 
   // Badges
